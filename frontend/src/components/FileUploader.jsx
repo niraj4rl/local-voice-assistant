@@ -7,9 +7,12 @@ function FileUploader({ onAudioReady }) {
     if (!file) {
       return;
     }
-    const allowed = ['audio/wav', 'audio/x-wav', 'audio/mpeg', 'audio/mp3', 'audio/webm'];
-    if (!allowed.includes(file.type) && !/\.(wav|mp3|webm)$/i.test(file.name)) {
-      console.warn('Unsupported file type:', file.type);
+    
+    const allowedMimes = ['audio/wav', 'audio/x-wav', 'audio/mpeg', 'audio/mp3', 'audio/webm', 'audio/ogg', 'audio/flac', 'audio/aac', 'audio/m4a'];
+    const allowedExts = /\.(wav|mp3|webm|ogg|flac|aac|m4a)$/i;
+    
+    if (!allowedMimes.includes(file.type) && !allowedExts.test(file.name)) {
+      alert(`Unsupported file type: ${file.type || 'unknown'}. Please use WAV, MP3, WebM, OGG, FLAC, AAC, or M4A.`);
       return;
     }
 
@@ -39,7 +42,7 @@ function FileUploader({ onAudioReady }) {
       >
         <input
           type="file"
-          accept=".wav,.mp3,.webm,audio/*"
+          accept="audio/*,.wav,.mp3,.webm,.ogg,.flac,.aac,.m4a"
           className="hidden"
           onChange={(event) => handleSelectedFile(event.target.files?.[0])}
         />

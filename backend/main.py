@@ -8,10 +8,11 @@ from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadF
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
-from .intent import IntentAnalyzer
+from .intent import IntentAnalyzer, _heuristic_fallback, _looks_like_code_request
 from .schemas import ProcessAudioResponse
 from .stt import STTEngine
 from .tools import ToolExecutor
+from .verification import CodeVerifier
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -30,6 +31,14 @@ app.add_middleware(
 stt_engine = STTEngine()
 intent_analyzer = IntentAnalyzer()
 tool_executor = ToolExecutor()
+code_verifier = CodeVerifier()
+
+
+def _resolve_intent(text: str):
+    intent_payload = intent_analyzer.analyze(text)
+    if _looks_like_code_request(text) and intent_payload.intent != "write_code":
+        intent_payload = _heuristic_fallback(text)
+    return intent_payload
 
 
 def _transcription_quality_issue(transcription: str, stt_debug: dict[str, object]) -> str | None:
@@ -101,7 +110,9 @@ async def process_audio(file: Annotated[UploadFile, File(...)]) -> ProcessAudioR
                 stt_debug=stt_debug,
             )
 
-        intent_payload = intent_analyzer.analyze(transcription)
+        intent_payload = _resolve_intent(transcription)
+        if intent_payload.intent == "write_code":
+            logs.append("Intent override: forced write_code for code request")
         logs.append(f"Intent detected: {intent_payload.intent}")
 
         action, output = tool_executor.execute(intent_payload, transcription)
@@ -126,7 +137,9 @@ async def process_audio(file: Annotated[UploadFile, File(...)]) -> ProcessAudioR
 def process_text(text: Annotated[str, Form(...)]) -> ProcessAudioResponse:
     logs: list[str] = ["Text input received"]
 
-    intent_payload = intent_analyzer.analyze(text)
+    intent_payload = _resolve_intent(text)
+    if intent_payload.intent == "write_code":
+        logs.append("Intent override: forced write_code for code request")
     logs.append(f"Intent detected: {intent_payload.intent}")
 
     action, output = tool_executor.execute(intent_payload, text)
@@ -140,3 +153,40 @@ def process_text(text: Annotated[str, Form(...)]) -> ProcessAudioResponse:
         logs=logs,
         stt_debug=None,
     )
+
+
+@app.post("/verify-code")
+def verify_code(
+    code: Annotated[str, Form(...)],
+    language: Annotated[str, Form(...)] = "python",
+    execute: Annotated[bool, Form(...)] = False,
+) -> dict:
+    """
+    Verify code syntax and optionally execute it.
+    
+    Args:
+        code: The source code to verify
+        language: Programming language (python, javascript, cpp, java, etc.)
+        execute: Whether to attempt execution (use caution!)
+    
+    Returns:
+        Verification result including syntax errors, warnings, and execution output
+    """
+    try:
+        result = code_verifier.verify(code, language, execute=execute, timeout=10)
+        return {
+            "success": True,
+            "data": result,
+        }
+    except Exception as e:
+        logger.exception("Verification failed")
+        return {
+            "success": False,
+            "error": str(e),
+            "data": {
+                "is_valid": False,
+                "errors": [str(e)],
+                "warnings": [],
+                "summary": f"❌ Verification error: {str(e)}",
+            },
+        }

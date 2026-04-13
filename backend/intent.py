@@ -45,6 +45,23 @@ def _contains_any(text: str, keywords: list[str]) -> bool:
     return any(keyword in text for keyword in keywords)
 
 
+def _contains_code_language(text: str) -> bool:
+    patterns = [
+        r"\bc\+\+\b",
+        r"\bcpp\b",
+        r"\bpython\b",
+        r"\bjavascript\b",
+        r"\btypescript\b",
+        r"\bjava\b",
+        r"\brust\b",
+        r"\bgo\b",
+        r"\bcss\b",
+        r"\bhtml\b",
+        r"\bsql\b",
+    ]
+    return any(re.search(pattern, text) for pattern in patterns)
+
+
 def _looks_like_code_request(text: str) -> bool:
     action_words = [
         "write",
@@ -70,7 +87,6 @@ def _looks_like_code_request(text: str) -> bool:
         "java",
         "go",
         "rust",
-        "c",
         "cpp",
         "html",
         "css",
@@ -79,7 +95,7 @@ def _looks_like_code_request(text: str) -> bool:
     
     # If text contains action word AND code keyword, it's a code request
     has_action = _contains_any(text, action_words)
-    has_code_keyword = _contains_any(text, code_keywords)
+    has_code_keyword = _contains_any(text, code_keywords) or _contains_code_language(text)
     
     # Strong case: has both
     if has_action and has_code_keyword:
@@ -88,6 +104,10 @@ def _looks_like_code_request(text: str) -> bool:
     # Also match patterns like "generate code", "write code", etc. with just "code"
     if (("generate" in text or "write" in text or "create" in text or "build" in text or "make" in text) and 
         ("code" in text or "script" in text or "app" in text or "api" in text)):
+        return True
+
+    # Explicit language + action combinations should always count as code requests.
+    if _contains_code_language(text) and _contains_any(text, ["generate", "write", "create", "build", "make", "implement", "add", "calculator"]):
         return True
     
     return False

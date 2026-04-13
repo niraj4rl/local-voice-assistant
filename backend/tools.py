@@ -8,6 +8,7 @@ import requests
 from .config import OUTPUT_DIR, settings
 from .schemas import IntentPayload
 from .security import ensure_path_inside, sanitize_filename
+from .verification import CodeVerifier
 
 logger = logging.getLogger(__name__)
 
@@ -26,11 +27,25 @@ LANG_EXTENSIONS = {
     "markdown": ".md",
 }
 
+LANG_DISPLAY_NAMES = {
+    "cpp": "C++",
+    "c": "C",
+    "javascript": "JavaScript",
+    "typescript": "TypeScript",
+    "python": "Python",
+    "java": "Java",
+    "go": "Go",
+    "rust": "Rust",
+    "html": "HTML",
+    "css": "CSS",
+}
+
 
 class ToolExecutor:
     def __init__(self) -> None:
         self.base_url = settings.ollama_base_url.rstrip("/")
         self.model = settings.ollama_model
+        self.verifier = CodeVerifier()
 
     def execute(self, payload: IntentPayload, original_text: str) -> tuple[str, str]:
         intent = payload.intent.strip().lower() or "general_chat"
@@ -61,6 +76,7 @@ class ToolExecutor:
         from .intent import _extract_task_name  # Import the extraction function
         
         language = (payload.language or "python").strip().lower()
+        language_label = LANG_DISPLAY_NAMES.get(language, language.title())
         extension = LANG_EXTENSIONS.get(language, ".txt")
 
         # Determine filename: use extracted task name if filename is generic or empty
@@ -89,9 +105,14 @@ class ToolExecutor:
             cleaned_code = self._clean_generated_code(code, language)
             target.write_text(cleaned_code, encoding="utf-8")
             task_desc = Path(target.stem).name
-            return "file_created_fallback", f"[!] LLM unavailable - using fallback\n[OK] Generated {language.title()} code\n[FILE] Saved to: `/output/{target.name}`\n[TASK] {task_desc.replace('_', ' ').title()}"
+            return "file_created_fallback", f"[!] LLM unavailable - using fallback\n[OK] Generated {language_label} code\n[FILE] Saved to: `/output/{target.name}`\n[TASK] {task_desc.replace('_', ' ').title()}"
 
         cleaned_code = self._clean_generated_code(code, language)
+        
+        # Verify the generated code
+        verification_result = self.verifier.verify(cleaned_code, language, execute=False)
+        verification_status = verification_result["summary"]
+        
         target.write_text(cleaned_code, encoding="utf-8")
         
         # Get description of what the code does
@@ -105,7 +126,7 @@ class ToolExecutor:
         task_desc = Path(target.stem).name  # Get the filename stem (without extension)
         formatted_task = task_desc.replace('_', ' ').title()
         
-        return "file_created", f"[OK] Generated {language.title()} code\n[FILE] Saved to: `/output/{target.name}`\n[TASK] {formatted_task}\n[INFO] {description}"
+        return "file_created", f"[OK] Generated {language_label} code\n[FILE] Saved to: `/output/{target.name}`\n[TASK] {formatted_task}\n[INFO] {description}\n[VERIFY] {verification_status}"
 
     def _next_available_path(self, original: Path) -> Path:
         stem = original.stem

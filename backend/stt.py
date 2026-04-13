@@ -178,6 +178,7 @@ class STTEngine:
                     result = self._transcriber.transcribe(
                         tmp_path,
                         beam_size=settings.whisper_beam_size,
+                        best_of=settings.whisper_best_of,
                         vad_filter=settings.whisper_vad_filter,
                         language=language,
                     )

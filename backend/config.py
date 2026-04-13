@@ -19,9 +19,10 @@ class Settings(BaseSettings):
         "http://127.0.0.1:5173",
     ]
 
-    whisper_model_size: str = "tiny"
+    whisper_model_size: str = "base"
     whisper_language: str = "en"
-    whisper_beam_size: int = 1
+    whisper_beam_size: int = 5
+    whisper_best_of: int = 5
     whisper_vad_filter: bool = True
     whisper_compute_type: str = "int8"
     ollama_model: str = "mistral"

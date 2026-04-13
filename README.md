@@ -1,57 +1,73 @@
-# Voice-Controlled Local AI Agent
+# BozzoAI - Voice-Controlled Local AI Agent
 
-A production-grade local AI system that accepts microphone or uploaded audio, transcribes speech, detects intent, executes safe local tools, and visualizes the full pipeline in a modern React UI.
+A production-grade voice-controlled AI system that accepts microphone or uploaded audio, transcribes speech, detects intent, generates code with explanations, and visualizes the full pipeline in a modern React UI with premium animations.
 
-## Features
+## ✨ Features
 
-- Live microphone recording and audio file upload (`.wav`, `.mp3`, `.webm`)
-- Local speech-to-text using Whisper (`faster-whisper` preferred)
-- Local intent and generation with Ollama (Mistral/Llama models)
-- Safe tool execution with output-only filesystem sandbox
-- Intent classes:
-  - `create_file`
-  - `write_code`
-  - `summarize_text`
-  - `general_chat`
-- Interactive dashboard showing:
-  - transcription
-  - detected intent
-  - action taken
-  - final output
-  - real-time pipeline logs
+- **Landing Page**: Premium hero section with BozzoAI branding, particle animations, and liquid glass effects
+- **Voice Control**: Live microphone recording and audio file upload (`.wav`, `.mp3`, `.webm`)
+- **Speech-to-Text**: Local speech-to-text using Whisper (`faster-whisper` preferred)
+- **AI Code Generation**: Local intent detection and multi-language code generation with Ollama (Mistral/Llama)
+- **Smart Explanations**: Generated code includes automatic explanations shown in chat
+- **Safe Execution**: Output-only filesystem sandbox with path traversal prevention
+- **UI Features**:
+  - Premium landing page with sparkle animations
+  - Liquid glass button effects
+  - Blue (#3B82F6) accent color scheme
+  - Smooth fade transitions and animations
+  - Back navigation from chat to landing page
+  - Real-time pipeline logs and status updates
+  - Responsive 3-panel layout
 
-## Architecture
+## 🎯 Supported Intents
 
-Audio Input -> STT -> Intent Detection -> Tool Executor -> UI Output
+- `write_code` - Generate code in any language (Python, JavaScript, HTML, CSS, etc.)
+- `create_file` - Create files with specified content
+- `general_chat` - General conversational responses
+- `summarize_text` - Text summarization
 
-## Project Structure
+## 🏗️ Architecture
 
-```text
-project/
-|-- frontend/
-|   |-- src/
-|   |   |-- components/
-|   |   |-- api/
-|   |-- package.json
-|
-|-- backend/
-|   |-- main.py
-|   |-- stt.py
-|   |-- intent.py
-|   |-- tools.py
-|   |-- security.py
-|   |-- schemas.py
-|   |-- config.py
-|   |-- requirements.txt
-|
-|-- output/
-|   |-- .gitkeep
-|
-|-- models/
-|-- README.md
+```
+Audio Input → Speech-to-Text → Intent Detection → Code Generation → UI Output
+                                    ↓
+                          LLM-powered explanation
 ```
 
-## API
+## 📁 Project Structure
+
+```
+project/
+├── frontend/
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── BozzoAILanding.tsx    (Premium landing page)
+│   │   │   ├── ChatPanel.tsx
+│   │   │   ├── InputCard.tsx
+│   │   │   ├── Sidebar.tsx
+│   │   │   ├── SystemStatus.tsx
+│   │   │   └── ui/
+│   │   │       ├── sparkles.tsx      (Particle animations)
+│   │   │       └── ...
+│   │   └── api/
+│   └── package.json
+│
+├── backend/
+│   ├── main.py
+│   ├── intent.py                     (Enhanced language detection)
+│   ├── tools.py                      (Code generation with explanations)
+│   ├── stt.py
+│   ├── security.py
+│   ├── config.py
+│   └── requirements.txt
+│
+├── output/
+│   └── .gitkeep
+│
+└── README.md
+```
+
+## 🌐 API Endpoints
 
 ### POST `/process-audio`
 
@@ -62,37 +78,41 @@ Response:
 
 ```json
 {
-  "transcription": "",
-  "intent": "",
-  "action": "",
-  "output": "",
-  "logs": []
+  "transcription": "user's speech",
+  "intent": "write_code",
+  "action": "file_created",
+  "output": "[OK] Generated Python code\n[FILE] Saved to: /output/spell_checker.py\n[TASK] Spell Checker\n[INFO] Creates a spell checker using NLTK...",
+  "logs": [...]
 }
 ```
 
-### POST `/process-text` (fallback/developer convenience)
+### POST `/process-text`
 
 - Content type: `multipart/form-data`
 - Field: `text`
 
-## Safety Model
+Same response format as `/process-audio`
 
-- Files are created only inside `/output`
-- Path traversal attempts are blocked
-- Filenames are sanitized to snake_case
-- Existing files are not overwritten automatically
-- If target exists, backend responds with `confirmation_required`
+## 🔒 Security Features
 
-## Setup
+- **Path Traversal Prevention**: All file paths validated and restricted to `/output` directory
+- **Filename Sanitization**: Filenames converted to snake_case and validated
+- **Safe Code Generation**: LLM-generated code is cleaned before execution
+- **Sandbox Execution**: Output-only filesystem access model
+- **Input Validation**: All user inputs validated and sanitized
+- **Request Verification**: Audio and text inputs validated before processing
 
-## 1. Clone and configure
+## 🚀 Quick Start
+
+### 1. Clone and Configure
 
 ```powershell
+git clone <repo>
+cd "vc controlled ai agent"
 Copy-Item .env.example .env
-Copy-Item frontend/.env.example frontend/.env
 ```
 
-## 2. Backend setup
+### 2. Backend Setup
 
 ```powershell
 cd backend
@@ -101,20 +121,7 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-Optional (secondary STT fallback):
-
-```powershell
-pip install -r requirements-optional.txt
-```
-
-Run backend:
-
-```powershell
-cd ..
-uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-## 3. Frontend setup
+### 3. Frontend Setup
 
 ```powershell
 cd frontend
@@ -122,75 +129,128 @@ npm install
 npm run dev
 ```
 
-Frontend default URL: `http://localhost:5173`
+Frontend: `http://localhost:5173`
 
-## 4. Ollama setup
-
-Install Ollama, then pull a model:
+### 4. Start Backend
 
 ```powershell
-ollama pull mistral
+cd ..
+uvicorn backend.main:app --host 0.0.0.0 --port 8000
 ```
 
-Start Ollama service and ensure `OLLAMA_BASE_URL` and `OLLAMA_MODEL` in `.env` match your setup.
+### 5. Ollama Setup
 
-## Model Requirements
+```powershell
+# Install Ollama from https://ollama.ai
+ollama pull mistral
+# Start Ollama service
+ollama serve
+```
+
+## 🤖 Model Configuration
 
 ### STT Models
-
-- Primary: `faster-whisper`
-- Secondary fallback: `openai-whisper`
-- Optional remote fallback: configure `USE_STT_API_FALLBACK=true` + `STT_API_URL`
+- **Primary**: `faster-whisper` (recommended for speed)
+- **Fallback**: `openai-whisper`
 
 ### LLM Models
+- **Recommended**: Ollama local models
+  - `mistral` (7B - balanced)
+  - `llama2` (7B - fast)
+  - `neural-chat` (7B - optimized)
 
-- Ollama local models (recommended): `mistral`, `llama3`, `qwen2.5`
+## 🎨 UI/UX Design
 
-## Hardware Limitations
+- **Color Scheme**: Dark theme (#050505 base, #3B82F6 blue accents)
+- **Effects**: 
+  - Sparkle particle animations
+  - Liquid glass button effects with backdrop blur
+  - Smooth fade and slide transitions
+  - Responsive animations
+- **Landing Page**: Premium hero with centered BozzoAI title, particle effects, and CTA button
 
-- CPU-only environments can run `base` Whisper, but transcription latency can increase
-- For faster STT, use a CUDA-compatible GPU and appropriate compute type
-- Large local LLMs require significant RAM/VRAM; use smaller models on constrained machines
+## 🔍 Security Check Results
 
-## Why API Fallback May Be Used
+To run security checks:
 
-If local STT cannot initialize (missing GPU support, insufficient memory, or unavailable model), API fallback allows continued operation by offloading transcription. This is optional and controlled via `.env`.
+```powershell
+# Python security
+pip install bandit
+bandit -r backend/
 
-## Frontend Design Notes
-
-- GitHub-style dark palette
-- Glassmorphism panels
-- Smooth entrance and pulse animations
-- Responsive 3-panel layout (left controls, center results, right status/logs)
-
-## Example
-
-Input:
-
-> Create a Python file with retry logic
-
-Expected:
-
-- Intent: `write_code`
-- Action: `file_created`
-- File written to: `/output/generated_python.py`
-
-## Demo Screenshots
-
-Place screenshots in a folder like `docs/screenshots/` and reference them here.
-
-Example markdown snippet:
-
-```md
-![Main UI](docs/screenshots/main-ui.png)
-![Pipeline Logs](docs/screenshots/pipeline-logs.png)
+# Node security
+cd frontend
+npm audit
 ```
 
-## Production Hardening Suggestions
+## 📝 Recent Updates (v2.0)
 
-- Add authentication for API endpoints
-- Add explicit user confirmation endpoint for overwrites/deletes
-- Add request rate limiting
-- Add structured logging and tracing (OpenTelemetry)
-- Add unit + integration tests and CI
-- Add model health checks and warm-up endpoints
+- ✅ Premium landing page with BozzoAI branding
+- ✅ Particle animation system for enhanced visuals
+- ✅ Liquid glass button effects
+- ✅ Enhanced code generation with automatic explanations
+- ✅ Back navigation button for seamless UX
+- ✅ Improved color scheme consistency (blue accents)
+- ✅ HTML/CSS language detection for code generation
+
+## 🧪 Testing
+
+Run tests:
+
+```powershell
+# Backend
+cd backend
+pytest
+
+# Frontend
+cd frontend
+npm test
+```
+
+## 🎯 Example Usage
+
+**Input**: "Generate a Python spell checker"
+
+**Process**:
+1. Audio transcribed: "Generate a Python spell checker"
+2. Intent detected: `write_code`
+3. Code generated in Python
+4. Automatic explanation provided
+5. File saved to `/output/`
+6. Results displayed in UI with explanation
+
+## 📦 Dependencies
+
+### Backend
+- FastAPI
+- Faster-Whisper (STT)
+- Ollama (LLM)
+- Uvicorn
+
+### Frontend
+- React 18.3.1
+- Vite 5.4
+- TailwindCSS 3.4
+- Framer Motion
+- Lucide React Icons
+
+## 🛣️ Roadmap
+
+- [ ] User authentication
+- [ ] Rate limiting
+- [ ] Advanced code analysis
+- [ ] Multi-language support
+- [ ] Real-time collaboration
+- [ ] Code execution environment
+
+## 📄 License
+
+MIT
+
+## 👤 Author
+
+Niraj Pachte
+
+---
+
+**Last Updated**: April 14, 2026

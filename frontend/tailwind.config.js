@@ -4,19 +4,22 @@ export default {
   theme: {
     extend: {
       colors: {
-        ink: '#0d1117',
-        slate: '#161b22',
-        panel: 'rgba(22, 27, 34, 0.72)',
-        line: '#2f3843',
-        accent: '#2f81f7',
-        mint: '#3fb950',
-        amber: '#d29922',
-        rose: '#f85149'
+        'jet-black': '#050505',
+        'jet-surface': '#0B0B0B',
+        'jet-card': '#111111',
+        'jet-border': '#1F1F1F',
+        'jet-text': '#EDEDED',
+        'jet-secondary': '#8A8A8A',
+        'neon-blue': '#3B82F6'
       },
       boxShadow: {
-        glow: '0 10px 30px rgba(47, 129, 247, 0.22)'
+        'neon-glow': '0 0 20px rgba(0, 255, 159, 0.15)'
       },
       keyframes: {
+        'fade-in': {
+          '0%': { opacity: '0', transform: 'translateY(8px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' }
+        },
         rise: {
           '0%': { opacity: '0', transform: 'translateY(12px)' },
           '100%': { opacity: '1', transform: 'translateY(0)' }
@@ -27,12 +30,13 @@ export default {
         }
       },
       animation: {
+        'fade-in': 'fade-in 300ms ease-out forwards',
         rise: 'rise 500ms ease forwards',
         pulseRing: 'pulseRing 1.2s ease-out infinite'
       },
       fontFamily: {
         heading: ['"Space Grotesk"', 'sans-serif'],
-        body: ['"Manrope"', 'sans-serif'],
+        body: ['"Inter"', 'sans-serif'],
         mono: ['"JetBrains Mono"', 'monospace']
       }
     }

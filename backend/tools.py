@@ -58,11 +58,18 @@ class ToolExecutor:
         return "file_created", f"Created {target.name} in /output"
 
     def _write_code(self, payload: IntentPayload, original_text: str) -> tuple[str, str]:
+        from .intent import _extract_task_name  # Import the extraction function
+        
         language = (payload.language or "python").strip().lower()
         extension = LANG_EXTENSIONS.get(language, ".txt")
-        default_name = f"generated_{language}{extension}"
 
-        requested_name = payload.filename or default_name
+        # Determine filename: use extracted task name if filename is generic or empty
+        requested_name = payload.filename or "code"
+        
+        # If filename is generic (just "code" or starts with "generated_"), extract from original text
+        if requested_name in ("code", "generated_code") or requested_name.startswith("generated_"):
+            requested_name = _extract_task_name(original_text)
+        
         filename = sanitize_filename(requested_name, default_ext=extension)
         if Path(filename).suffix != extension:
             filename = f"{Path(filename).stem}{extension}"
@@ -81,11 +88,24 @@ class ToolExecutor:
             code = self._generate_fallback_code(language, original_text)
             cleaned_code = self._clean_generated_code(code, language)
             target.write_text(cleaned_code, encoding="utf-8")
-            return "file_created_fallback", f"LLM unavailable, wrote fallback {language} code to /output/{target.name}"
+            task_desc = Path(target.stem).name
+            return "file_created_fallback", f"[!] LLM unavailable - using fallback\n[OK] Generated {language.title()} code\n[FILE] Saved to: `/output/{target.name}`\n[TASK] {task_desc.replace('_', ' ').title()}"
 
         cleaned_code = self._clean_generated_code(code, language)
         target.write_text(cleaned_code, encoding="utf-8")
-        return "file_created", f"Wrote {language} code to /output/{target.name}"
+        
+        # Get description of what the code does
+        description_prompt = f"Briefly explain in 1-2 sentences what this {language} code does based on this request: {original_text}"
+        description = self._chat(description_prompt)
+        if not description.startswith("Local LLM unavailable"):
+            description = description.split("\n")[0][:200]  # Get first line, max 200 chars
+        else:
+            description = f"Code for: {original_text[:100]}"
+        
+        task_desc = Path(target.stem).name  # Get the filename stem (without extension)
+        formatted_task = task_desc.replace('_', ' ').title()
+        
+        return "file_created", f"[OK] Generated {language.title()} code\n[FILE] Saved to: `/output/{target.name}`\n[TASK] {formatted_task}\n[INFO] {description}"
 
     def _next_available_path(self, original: Path) -> Path:
         stem = original.stem

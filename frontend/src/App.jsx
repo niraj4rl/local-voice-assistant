@@ -1,56 +1,174 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { ArrowLeft } from 'lucide-react';
 import { getSttStatus, processAudio, processText, warmupStt } from './api/client';
-import AudioRecorder from './components/AudioRecorder';
-import FileUploader from './components/FileUploader';
-import OutputPreview from './components/OutputPreview';
-import ResultDashboard from './components/ResultDashboard';
-
-const initialResult = {
-  transcription: '',
-  intent: '',
-  action: '',
-  output: '',
-  stt_debug: null
-};
+import { Sidebar } from './components/Sidebar';
+import { InputCard } from './components/InputCard';
+import { ChatPanel } from './components/ChatPanel';
+import { SystemStatus } from './components/SystemStatus';
+import { BozzoAILanding } from './components/BozzoAILanding';
 
 function App() {
-  const [result, setResult] = useState(initialResult);
+  const [activeNav, setActiveNav] = useState('dashboard');
+  const [sessions, setSessions] = useState([]);
+  const [currentSessionId, setCurrentSessionId] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [textInput, setTextInput] = useState('');
   const [sttStatus, setSttStatus] = useState('checking');
-  const [sttErrorMessage, setSttErrorMessage] = useState('');
+  const [latency, setLatency] = useState(0);
+  const [showLanding, setShowLanding] = useState(true);
 
-  async function handleAudioInput(fileBlob, filename) {
+  // Initialize with first session
+  useEffect(() => {
+    if (sessions.length === 0) {
+      createNewSession();
+    }
+  }, []);
+
+  const createNewSession = () => {
+    const sessionId = Date.now().toString();
+    const newSession = {
+      id: sessionId,
+      title: `Chat ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+      messages: [],
+      createdAt: new Date(),
+    };
+    setSessions((prev) => [newSession, ...prev]);
+    setCurrentSessionId(sessionId);
+    setActiveNav('dashboard');
+    setShowLanding(false);
+  };
+
+  const deleteSession = (sessionId) => {
+    setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+    if (currentSessionId === sessionId) {
+      const remaining = sessions.filter((s) => s.id !== sessionId);
+      if (remaining.length > 0) {
+        setCurrentSessionId(remaining[0].id);
+      } else {
+        createNewSession();
+      }
+    }
+  };
+
+  const switchSession = (sessionId) => {
+    setCurrentSessionId(sessionId);
+    setActiveNav('dashboard');
+  };
+
+  const getCurrentSession = () => {
+    return sessions.find((s) => s.id === currentSessionId);
+  };
+
+  const updateCurrentSessionMessages = (messages) => {
+    setSessions((prev) =>
+      prev.map((s) =>
+        s.id === currentSessionId ? { ...s, messages, title: generateSessionTitle(messages) } : s
+      )
+    );
+  };
+
+  const generateSessionTitle = (messages) => {
+    const firstUserMsg = messages.find((m) => m.type === 'user');
+    if (firstUserMsg) {
+      const preview = firstUserMsg.content.substring(0, 30);
+      return preview.length < firstUserMsg.content.length ? preview + '...' : preview;
+    }
+    return `Chat ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+  };
+
+  async function handleAudioInput(fileBlob, filename = 'upload.webm') {
+    const currentSession = getCurrentSession();
+    if (!currentSession) return;
+
     setLoading(true);
+    const startTime = Date.now();
 
     try {
       const data = await processAudio(fileBlob, filename);
-      setResult(data);
+      setLatency(Date.now() - startTime);
+
+      const userMessage = {
+        id: Date.now().toString(),
+        type: 'user',
+        content: data.transcription || '[Audio processed]',
+        timestamp: new Date(),
+      };
+
+      const aiMessage = {
+        id: (Date.now() + 1).toString(),
+        type: 'ai',
+        content: data.output || 'No response',
+        timestamp: new Date(),
+      };
+
+      const newMessages = [...currentSession.messages, userMessage, aiMessage];
+      updateCurrentSessionMessages(newMessages);
     } catch (error) {
-      setResult({ ...initialResult, output: error.message, action: 'failed', intent: 'general_chat' });
+      const errorMsg = {
+        id: Date.now().toString(),
+        type: 'ai',
+        content: error.message || 'Error processing audio',
+        timestamp: new Date(),
+      };
+      const newMessages = [...currentSession.messages, errorMsg];
+      updateCurrentSessionMessages(newMessages);
     } finally {
       setLoading(false);
     }
   }
 
-  async function submitText(event) {
-    event.preventDefault();
-    if (!textInput.trim()) {
+  async function submitText(text) {
+    if (!text.trim()) {
       return;
     }
 
+    const currentSession = getCurrentSession();
+    if (!currentSession) return;
+
+    const userMessage = {
+      id: Date.now().toString(),
+      type: 'user',
+      content: text,
+      timestamp: new Date(),
+    };
+
+    let newMessages = [...currentSession.messages, userMessage];
+    updateCurrentSessionMessages(newMessages);
+
     setLoading(true);
+    const startTime = Date.now();
 
     try {
-      const data = await processText(textInput);
-      setResult(data);
-      setTextInput('');
+      const data = await processText(text);
+      setLatency(Date.now() - startTime);
+
+      const aiMessage = {
+        id: (Date.now() + 1).toString(),
+        type: 'ai',
+        content: data.output || 'No response',
+        timestamp: new Date(),
+      };
+
+      newMessages = [...newMessages, aiMessage];
+      updateCurrentSessionMessages(newMessages);
     } catch (error) {
-      setResult({ ...initialResult, output: error.message, action: 'failed', intent: 'general_chat' });
+      const errorMsg = {
+        id: (Date.now() + 1).toString(),
+        type: 'ai',
+        content: error.message || 'Error processing request',
+        timestamp: new Date(),
+      };
+      newMessages = [...newMessages, errorMsg];
+      updateCurrentSessionMessages(newMessages);
     } finally {
       setLoading(false);
     }
   }
+
+  const clearChat = () => {
+    if (window.confirm('Clear all messages in this chat?')) {
+      updateCurrentSessionMessages([]);
+    }
+  };
 
   useEffect(() => {
     let intervalId;
@@ -59,7 +177,6 @@ function App() {
     async function probeStt() {
       try {
         const status = await getSttStatus();
-        setSttErrorMessage('');
 
         if (status.initialized) {
           setSttStatus('ready');
@@ -81,7 +198,6 @@ function App() {
         setSttStatus('warming');
       } catch (error) {
         setSttStatus('offline');
-        setSttErrorMessage(error?.message || 'Could not reach backend STT service');
       }
     }
 
@@ -95,63 +211,121 @@ function App() {
     };
   }, []);
 
-  const statusText = useMemo(() => {
-    if (loading) {
-      return 'Pipeline running...';
-    }
-    if (result.action) {
-      return `Last action: ${result.action}`;
-    }
-    return 'Ready for a voice command';
-  }, [loading, result.action]);
+  if (showLanding) {
+    return <BozzoAILanding onGetStarted={createNewSession} />;
+  }
 
   return (
-    <div className="min-h-screen bg-ink text-slate-100">
-      <div className="bg-overlay" />
+    <div className="flex h-screen bg-[#050505]">
+      {/* Sidebar */}
+      <Sidebar 
+        activeItem={activeNav} 
+        onNavigation={setActiveNav}
+        sessions={sessions}
+        currentSessionId={currentSessionId}
+        onNewChat={createNewSession}
+        onSelectSession={switchSession}
+        onDeleteSession={deleteSession}
+      />
 
-      <header className="mx-auto max-w-[1400px] px-4 pt-8 md:px-8">
-        <p className="text-xs uppercase tracking-[0.24em] text-accent">Local AI System</p>
-        <h1 className="font-heading text-3xl font-semibold md:text-5xl">Voice-Controlled Local AI Agent</h1>
-        <p className="mt-3 max-w-3xl text-slate-300">
-          Audio Input to STT, Intent Detection, Tool Execution, and UI insight with strict output-only sandboxing.
-        </p>
-        <p className="mt-2 text-sm text-mint">{statusText}</p>
-        <p className="mt-1 text-xs text-slate-400">
-          STT status: {sttStatus === 'ready' ? 'ready' : sttStatus === 'warming' ? 'warming up model' : sttStatus}
-          {sttErrorMessage ? ` (${sttErrorMessage})` : ''}
-        </p>
-      </header>
+      {/* Main Content */}
+      <div className="ml-56 flex-1 flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="border-b border-[#1F1F1F] bg-[#050505] px-8 py-5 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => setShowLanding(true)}
+              className="p-2 hover:bg-[#1F1F1F] rounded-lg transition-colors duration-200 text-[#8A8A8A] hover:text-[#3B82F6]"
+              title="Back to Landing Page"
+            >
+              <ArrowLeft size={20} />
+            </button>
+            <h1 className="text-lg font-bold text-[#EDEDED] uppercase tracking-wide">
+              {activeNav === 'dashboard' && 'Chat'}
+              {activeNav === 'history' && 'History'}
+            </h1>
+          </div>
+        </div>
 
-      <main className="mx-auto grid max-w-[1400px] grid-cols-1 gap-4 px-4 py-6 md:px-8 xl:grid-cols-[320px,1fr,340px]">
-        <aside className="space-y-4">
-          <AudioRecorder onAudioReady={handleAudioInput} />
-          <FileUploader onAudioReady={handleAudioInput} />
-
-          <section className="glass-panel animate-rise" style={{ animationDelay: '210ms' }}>
-            <h2 className="panel-title">Text Command (Fallback)</h2>
-            <form onSubmit={submitText} className="mt-4 space-y-3">
-              <textarea
-                value={textInput}
-                onChange={(event) => setTextInput(event.target.value)}
-                placeholder="Example: Create a Python file with retry logic"
-                className="w-full rounded-lg border border-line bg-ink/40 p-3 text-sm outline-none ring-accent/40 transition focus:ring"
-                rows={4}
+        {/* Content Area - Conversation Layout */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {activeNav === 'dashboard' && getCurrentSession() && (
+            <>
+              {/* Chat Panel - Takes most space */}
+              <ChatPanel 
+                messages={getCurrentSession().messages} 
+                isThinking={loading} 
+                onClear={clearChat} 
+                showClearButton={true} 
               />
-              <button type="submit" className="w-full rounded-lg bg-accent px-4 py-2 font-semibold text-white transition hover:brightness-110">
-                Run Command
-              </button>
-            </form>
-          </section>
-        </aside>
+              
+              {/* Input Panel - Fixed at bottom */}
+              <InputCard 
+                onSendText={submitText} 
+                onSendAudio={handleAudioInput} 
+                isLoading={loading} 
+              />
+            </>
+          )}
 
-        <section>
-          <ResultDashboard result={result} loading={loading} />
-        </section>
+          {activeNav === 'history' && (
+            <div className="flex-1 overflow-y-auto p-8">
+              {sessions.length === 0 ? (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-center">
+                    <p className="text-[#8A8A8A]">No chat history yet. Start a new chat!</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3 max-w-3xl">
+                  {sessions.map((session) => (
+                    <div
+                      key={session.id}
+                      className={`border rounded-lg p-5 cursor-pointer transition-all duration-150 group ${
+                        currentSessionId === session.id
+                          ? 'border-[#3B82F6] bg-[#3B82F6]/5 shadow-lg shadow-[#3B82F6]/10'
+                          : 'border-[#1F1F1F] bg-[#0B0B0B] hover:border-[#3B82F6] hover:bg-[#111111]'
+                      }`}
+                      onClick={() => switchSession(session.id)}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <h3 className="text-sm font-semibold text-[#EDEDED] mb-2 group-hover:text-[#3B82F6] transition-colors">{session.title}</h3>
+                          <p className="text-xs text-[#8A8A8A]">
+                            {session.messages.length} messages
+                          </p>
+                          <p className="text-xs text-[#8A8A8A] mt-2">
+                            {session.createdAt.toLocaleString()}
+                          </p>
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (window.confirm('Delete this chat?')) {
+                              deleteSession(session.id);
+                            }
+                          }}
+                          className="ml-4 px-3 py-1.5 text-xs rounded font-medium text-[#8A8A8A] hover:text-[#FF6B6B] hover:bg-[#FF6B6B]/10 border border-transparent hover:border-[#FF6B6B]/30 transition-all duration-150"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
 
-        <aside className="space-y-4">
-          <OutputPreview result={result} />
-        </aside>
-      </main>
+      {/* Right Sidebar - System Status */}
+      {activeNav === 'dashboard' && (
+        <div className="w-72 border-l border-[#1F1F1F] bg-[#050505] p-6 overflow-y-auto">
+          <h2 className="text-xs font-semibold text-[#8A8A8A] uppercase mb-6 tracking-wide">System Status</h2>
+          <SystemStatus sttStatus={sttStatus} isLoading={loading} latency={latency} sttDebug={null} />
+        </div>
+      )}
     </div>
   );
 }

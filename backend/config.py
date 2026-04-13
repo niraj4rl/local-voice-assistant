@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     whisper_best_of: int = 5
     whisper_vad_filter: bool = True
     whisper_compute_type: str = "int8"
+    stt_min_language_probability: float = 0.55
+    stt_min_transcript_chars: int = 6
+    stt_min_alpha_ratio: float = 0.45
     ollama_model: str = "mistral"
     ollama_base_url: str = "http://localhost:11434"
     ollama_intent_max_tokens: int = 80

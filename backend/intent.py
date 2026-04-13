@@ -29,25 +29,141 @@ Rules:
   \"content\": \"\",
   \"language\": \"\"
 }
-3) If ambiguous, use intent=general_chat.
+3) Be AGGRESSIVE about detecting write_code: If user asks to generate, write, create, or build code/scripts/functions/classes/apps/apis in ANY language, use write_code.
 4) filename should be empty unless intent is create_file or write_code.
-5) language should be set only for write_code when detectable.
-6) content should contain the requested text/code payload when clear.
+5) For write_code: filename MUST be a descriptive task name (snake_case).
+   - Examples: fibonacci_calculator, todo_app, api_server, data_parser
+   - Extract key nouns from the request
+   - Do NOT use generic names like "generated_code" or "script"
+6) language should be auto-detected from patterns (python, javascript, java, rust, go, c, cpp).
+7) content should contain the requested text/code payload when clear.
+8) KEYWORDS FOR write_code: generate + code, write + code, create + code, build + code, make + code.
 """
+
+
+def _contains_any(text: str, keywords: list[str]) -> bool:
+    return any(keyword in text for keyword in keywords)
+
+
+def _looks_like_code_request(text: str) -> bool:
+    action_words = [
+        "write",
+        "create",
+        "generate",
+        "build",
+        "make",
+        "implement",
+        "code",
+        "script",
+    ]
+    code_keywords = [
+        "code",
+        "script",
+        "program",
+        "function",
+        "class",
+        "app",
+        "api",
+        "python",
+        "javascript",
+        "typescript",
+        "java",
+        "go",
+        "rust",
+        "c",
+        "cpp",
+        "html",
+        "css",
+        "sql",
+    ]
+    
+    # If text contains action word AND code keyword, it's a code request
+    has_action = _contains_any(text, action_words)
+    has_code_keyword = _contains_any(text, code_keywords)
+    
+    # Strong case: has both
+    if has_action and has_code_keyword:
+        return True
+    
+    # Also match patterns like "generate code", "write code", etc. with just "code"
+    if (("generate" in text or "write" in text or "create" in text or "build" in text or "make" in text) and 
+        ("code" in text or "script" in text or "app" in text or "api" in text)):
+        return True
+    
+    return False
+
+
+def _extract_task_name(text: str) -> str:
+    """Extract a meaningful task name from user text.
+    
+    Examples:
+    - 'write a c program to calculate fibonacci' -> 'fibonacci_calculator'
+    - 'create a function to sort array' -> 'sort_array'
+    - 'generate code for todo app' -> 'todo_app'
+    """
+    # Remove common action words
+    action_words = ["write", "create", "generate", "build", "make", "implement", 
+                    "a ", "to ", "for ", "that ", "which "]
+    
+    # Remove code-related words
+    code_words = ["code", "script", "program", "function", "class", "app", "application",
+                  "python", "javascript", "typescript", "java", "go", "rust", "c", "cpp",
+                  "in ", "using "]
+    
+    cleaned = text.lower().strip()
+    for word in action_words + code_words:
+        cleaned = cleaned.replace(word, " ")
+    
+    # Extract first few meaningful words
+    words = [w for w in cleaned.split() if len(w) > 2]
+    if not words:
+        words = cleaned.split()
+    
+    task_name = "_".join(words[:4])  # Use first 4 words
+    # Remove special characters, keep only alphanumeric and underscores
+    task_name = re.sub(r'[^a-z0-9_]', '', task_name)
+    task_name = re.sub(r'_+', '_', task_name)  # Collapse multiple underscores
+    task_name = task_name.strip('_')  # Remove leading/trailing underscores
+    
+    return task_name or "code"
 
 
 def _heuristic_fallback(user_text: str) -> IntentPayload:
     text = user_text.lower().strip()
 
-    if any(keyword in text for keyword in ["summarize", "summary", "tl;dr"]):
+    if _contains_any(text, ["summarize", "summary", "tl;dr"]):
         return IntentPayload(intent="summarize_text", content=user_text)
 
-    if any(keyword in text for keyword in ["create file", "new file", "make file"]):
+    if _contains_any(text, ["create file", "new file", "make file"]):
         return IntentPayload(intent="create_file", filename="notes.txt", content="")
 
-    if any(keyword in text for keyword in ["write code", "python", "javascript", "function", "class"]):
-        language = "python" if "python" in text else "javascript" if "javascript" in text else ""
-        return IntentPayload(intent="write_code", filename="generated_code", content=user_text, language=language)
+    if _looks_like_code_request(text):
+        # Auto-detect language from text
+        if "python" in text:
+            language = "python"
+        elif "html" in text or "webpage" in text:
+            language = "html"
+        elif "css" in text:
+            language = "css"
+        elif "javascript" in text or " js" in text or " js " in text:
+            language = "javascript"
+        elif "java" in text and "javascript" not in text:
+            language = "java"
+        elif "typescript" in text:
+            language = "typescript"
+        elif "cpp" in text or "c++" in text:
+            language = "cpp"
+        elif "rust" in text:
+            language = "rust"
+        elif "go" in text and " golang" not in text:
+            language = "go"
+        elif " c " in text or text.startswith("c "):
+            language = "c"
+        else:
+            language = "python"  # Default to Python
+        
+        task_name = _extract_task_name(user_text)
+        return IntentPayload(intent="write_code", filename=task_name, content=user_text, language=language)
 
     return IntentPayload(intent="general_chat", content=user_text)
 

@@ -1,0 +1,142 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Manrope:wght@400;600;700&family=Space+Grotesk:wght@500;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: 'Manrope', sans-serif;
+  background: radial-gradient(circle at 15% 15%, rgba(47, 129, 247, 0.16), transparent 34%),
+    radial-gradient(circle at 78% 10%, rgba(63, 185, 80, 0.12), transparent 35%),
+    linear-gradient(165deg, #0d1117 0%, #111827 65%, #0b111b 100%);
+}
+
+.bg-overlay {
+  position: fixed;
+  inset: 0;
+  background-image: linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px);
+  background-size: 42px 42px;
+  pointer-events: none;
+}
+
+.glass-panel {
+  border: 1px solid rgba(143, 156, 171, 0.24);
+  background: rgba(22, 27, 34, 0.68);
+  backdrop-filter: blur(10px);
+  border-radius: 14px;
+  padding: 1rem;
+  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.26);
+}
+
+.panel-title {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.panel-subtitle {
+  margin-top: 0.3rem;
+  color: rgb(178 190 204);
+  font-size: 0.9rem;
+}
+
+.record-btn {
+  height: 3.7rem;
+  width: 8.5rem;
+  border: 1px solid rgba(47, 129, 247, 0.5);
+  border-radius: 999px;
+  font-weight: 700;
+  background: linear-gradient(120deg, rgba(47, 129, 247, 0.95), rgba(47, 129, 247, 0.62));
+  color: white;
+  box-shadow: 0 10px 30px rgba(47, 129, 247, 0.24);
+  transition: transform 180ms ease, filter 180ms ease;
+}
+
+.record-btn:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.08);
+}
+
+.record-btn.recording {
+  background: linear-gradient(120deg, rgba(248, 81, 73, 0.95), rgba(248, 81, 73, 0.55));
+  border-color: rgba(248, 81, 73, 0.6);
+}
+
+.drop-zone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 130px;
+  border: 1px dashed rgba(143, 156, 171, 0.5);
+  border-radius: 12px;
+  margin-top: 1rem;
+  text-align: center;
+  color: rgb(182 192 203);
+  cursor: pointer;
+  transition: border-color 200ms ease, background-color 200ms ease;
+  padding: 0.8rem;
+}
+
+.drop-zone.dragging,
+.drop-zone:hover {
+  border-color: rgba(47, 129, 247, 0.9);
+  background: rgba(47, 129, 247, 0.12);
+}
+
+.label {
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgb(144 157 170);
+}
+
+.value-box {
+  margin-top: 0.35rem;
+  border: 1px solid rgba(143, 156, 171, 0.35);
+  background: rgba(13, 17, 23, 0.5);
+  padding: 0.75rem;
+  border-radius: 10px;
+  color: rgb(228 232 236);
+}
+
+.intent-badge {
+  border-radius: 999px;
+  padding: 0.26rem 0.7rem;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border: 1px solid rgba(143, 156, 171, 0.45);
+  background: rgba(143, 156, 171, 0.1);
+}
+
+.intent-badge.write_code {
+  color: #3fb950;
+  border-color: rgba(63, 185, 80, 0.45);
+  background: rgba(63, 185, 80, 0.12);
+}
+
+.intent-badge.create_file {
+  color: #2f81f7;
+  border-color: rgba(47, 129, 247, 0.45);
+  background: rgba(47, 129, 247, 0.14);
+}
+
+.intent-badge.summarize_text {
+  color: #d29922;
+  border-color: rgba(210, 153, 34, 0.45);
+  background: rgba(210, 153, 34, 0.15);
+}
+
+.intent-badge.general_chat {
+  color: #c9d1d9;
+}

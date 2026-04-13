@@ -10,7 +10,8 @@ const initialResult = {
   transcription: '',
   intent: '',
   action: '',
-  output: ''
+  output: '',
+  stt_debug: null
 };
 
 function App() {
@@ -19,6 +20,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [textInput, setTextInput] = useState('');
   const [sttStatus, setSttStatus] = useState('checking');
+  const [sttErrorMessage, setSttErrorMessage] = useState('');
 
   function appendLog(message) {
     setLogs((current) => [...current, `${new Date().toLocaleTimeString()} - ${message}`]);
@@ -65,44 +67,40 @@ function App() {
 
   useEffect(() => {
     let intervalId;
+    let warmupRequested = false;
 
-    async function initStt() {
+    async function probeStt() {
       try {
         const status = await getSttStatus();
+        setSttErrorMessage('');
+
         if (status.initialized) {
           setSttStatus('ready');
-          appendLog('STT engine ready');
+          return;
+        }
+
+        if (status.initializing) {
+          setSttStatus('warming');
+          return;
+        }
+
+        if (!warmupRequested) {
+          warmupRequested = true;
+          setSttStatus('warming');
+          appendLog('Starting STT warmup in background');
+          await warmupStt();
           return;
         }
 
         setSttStatus('warming');
-        appendLog('Starting STT warmup in background');
-        await warmupStt();
-
-        intervalId = setInterval(async () => {
-          try {
-            const nextStatus = await getSttStatus();
-            if (nextStatus.initialized) {
-              setSttStatus('ready');
-              appendLog('STT warmup completed');
-              clearInterval(intervalId);
-            } else if (nextStatus.error) {
-              setSttStatus('error');
-              appendLog(`STT warmup error: ${nextStatus.error}`);
-              clearInterval(intervalId);
-            }
-          } catch {
-            setSttStatus('error');
-            clearInterval(intervalId);
-          }
-        }, 3000);
-      } catch {
-        setSttStatus('error');
-        appendLog('Could not initialize STT status.');
+      } catch (error) {
+        setSttStatus('offline');
+        setSttErrorMessage(error?.message || 'Could not reach backend STT service');
       }
     }
 
-    initStt();
+    probeStt();
+    intervalId = setInterval(probeStt, 4000);
 
     return () => {
       if (intervalId) {
@@ -134,6 +132,7 @@ function App() {
         <p className="mt-2 text-sm text-mint">{statusText}</p>
         <p className="mt-1 text-xs text-slate-400">
           STT status: {sttStatus === 'ready' ? 'ready' : sttStatus === 'warming' ? 'warming up model' : sttStatus}
+          {sttErrorMessage ? ` (${sttErrorMessage})` : ''}
         </p>
       </header>
 

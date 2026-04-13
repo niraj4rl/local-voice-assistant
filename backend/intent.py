@@ -58,10 +58,18 @@ class IntentAnalyzer:
         self.model = settings.ollama_model
 
     def analyze(self, user_text: str) -> IntentPayload:
+        fast_path = _heuristic_fallback(user_text)
+        if fast_path.intent != "general_chat":
+            return fast_path
+
         payload = {
             "model": self.model,
             "stream": False,
             "prompt": f"{SYSTEM_PROMPT}\n\nUser text:\n{user_text}\n\nReturn JSON only.",
+            "options": {
+                "temperature": 0,
+                "num_predict": settings.ollama_intent_max_tokens,
+            },
         }
 
         try:

@@ -70,7 +70,7 @@ class ToolExecutor:
         target = OUTPUT_DIR / filename
         ensure_path_inside(OUTPUT_DIR, target)
         if target.exists():
-            return "confirmation_required", f"File already exists: {target.name}. Confirm overwrite to continue."
+            target = self._next_available_path(target)
 
         prompt = (
             "Generate production-ready code with concise comments and best practices. "
@@ -78,10 +78,71 @@ class ToolExecutor:
         )
         code = self._chat(prompt)
         if code.startswith("Local LLM unavailable"):
-            return "failed", code
+            code = self._generate_fallback_code(language, original_text)
+            target.write_text(code.strip() + "\n", encoding="utf-8")
+            return "file_created_fallback", f"LLM unavailable, wrote fallback {language} code to /output/{target.name}"
 
         target.write_text(code.strip() + "\n", encoding="utf-8")
         return "file_created", f"Wrote {language} code to /output/{target.name}"
+
+    def _next_available_path(self, original: Path) -> Path:
+        stem = original.stem
+        suffix = original.suffix
+        parent = original.parent
+        index = 2
+        while True:
+            candidate = parent / f"{stem}_{index}{suffix}"
+            ensure_path_inside(OUTPUT_DIR, candidate)
+            if not candidate.exists():
+                return candidate
+            index += 1
+
+    def _generate_fallback_code(self, language: str, request_text: str) -> str:
+        if language == "python":
+            return (
+                "import time\n"
+                "from typing import Callable, TypeVar\n\n"
+                "T = TypeVar('T')\n\n"
+                "def retry(operation: Callable[[], T], retries: int = 3, delay_seconds: float = 0.5) -> T:\n"
+                "    \"\"\"Execute an operation with simple retry logic.\"\"\"\n"
+                "    last_error: Exception | None = None\n"
+                "    for attempt in range(1, retries + 1):\n"
+                "        try:\n"
+                "            return operation()\n"
+                "        except Exception as exc:\n"
+                "            last_error = exc\n"
+                "            if attempt == retries:\n"
+                "                break\n"
+                "            time.sleep(delay_seconds)\n"
+                "    raise RuntimeError(f'Operation failed after {retries} attempts') from last_error\n\n"
+                "# Request context:\n"
+                f"# {request_text}\n"
+            )
+
+        if language == "javascript":
+            return (
+                "export async function retry(operation, retries = 3, delayMs = 500) {\n"
+                "  let lastError;\n"
+                "  for (let attempt = 1; attempt <= retries; attempt += 1) {\n"
+                "    try {\n"
+                "      return await operation();\n"
+                "    } catch (error) {\n"
+                "      lastError = error;\n"
+                "      if (attempt === retries) break;\n"
+                "      await new Promise((resolve) => setTimeout(resolve, delayMs));\n"
+                "    }\n"
+                "  }\n"
+                "  throw new Error(`Operation failed after ${retries} attempts: ${String(lastError)}`);\n"
+                "}\n\n"
+                "// Request context:\n"
+                f"// {request_text}\n"
+            )
+
+        return (
+            "// Local fallback template generated because LLM is unavailable.\n"
+            f"// Requested language: {language}\n"
+            f"// Request: {request_text}\n"
+        )
 
     def _summarize(self, text: str) -> tuple[str, str]:
         if not text.strip():
@@ -94,7 +155,15 @@ class ToolExecutor:
         return "summarized", self._chat(prompt)
 
     def _chat(self, prompt: str) -> str:
-        payload = {"model": self.model, "stream": False, "prompt": prompt}
+        payload = {
+            "model": self.model,
+            "stream": False,
+            "prompt": prompt,
+            "options": {
+                "temperature": settings.ollama_temperature,
+                "num_predict": settings.ollama_response_max_tokens,
+            },
+        }
         try:
             response = requests.post(f"{self.base_url}/api/generate", json=payload, timeout=90)
             response.raise_for_status()

@@ -15,8 +15,16 @@ function AudioRecorder({ onAudioReady, onLog }) {
 
   async function startRecording() {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          channelCount: 1
+        }
+      });
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm';
+      const recorder = new MediaRecorder(stream, { mimeType });
       chunksRef.current = [];
 
       recorder.ondataavailable = (event) => {
@@ -26,7 +34,11 @@ function AudioRecorder({ onAudioReady, onLog }) {
       };
 
       recorder.onstop = () => {
-        const audioBlob = new Blob(chunksRef.current, { type: 'audio/webm' });
+        const audioBlob = new Blob(chunksRef.current, { type: mimeType });
+        onLog(`Captured audio size: ${(audioBlob.size / 1024).toFixed(1)} KB`);
+        if (audioBlob.size < 4096) {
+          onLog('Recording is very short or quiet. Try speaking louder for 2-5 seconds.');
+        }
         onAudioReady(audioBlob, `mic_${Date.now()}.webm`);
         stream.getTracks().forEach((track) => track.stop());
       };
@@ -34,7 +46,7 @@ function AudioRecorder({ onAudioReady, onLog }) {
       recorder.start();
       mediaRecorderRef.current = recorder;
       setIsRecording(true);
-      onLog('Microphone recording started');
+      onLog('Microphone recording started. Speak clearly and keep the mic close.');
     } catch (error) {
       onLog(`Microphone access failed: ${error.message}`);
     }

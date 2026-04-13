@@ -20,6 +20,7 @@ app = FastAPI(title=settings.app_name, version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1|\d+\.\d+\.\d+\.\d+)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -52,7 +53,17 @@ async def process_audio(file: Annotated[UploadFile, File(...)]) -> ProcessAudioR
     try:
         logs.append("Audio received")
         transcription = await stt_engine.transcribe_upload(file)
+        stt_debug = stt_engine.get_last_debug()
         logs.append("Speech-to-text completed")
+        if stt_debug.get("backend"):
+            logs.append(f"STT backend: {stt_debug['backend']}")
+        if stt_debug.get("language"):
+            logs.append(
+                f"Detected language: {stt_debug['language']} ({float(stt_debug.get('language_probability', 0.0)):.2f})"
+            )
+        if not transcription.strip():
+            transcription = "No speech detected in the audio."
+            logs.append("No speech detected")
 
         intent_payload = intent_analyzer.analyze(transcription)
         logs.append(f"Intent detected: {intent_payload.intent}")
@@ -66,6 +77,7 @@ async def process_audio(file: Annotated[UploadFile, File(...)]) -> ProcessAudioR
             action=action,
             output=output,
             logs=logs,
+            stt_debug=stt_debug,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -90,4 +102,5 @@ def process_text(text: Annotated[str, Form(...)]) -> ProcessAudioResponse:
         action=action,
         output=output,
         logs=logs,
+        stt_debug=None,
     )

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
-function AudioRecorder({ onAudioReady, onLog }) {
+function AudioRecorder({ onAudioReady }) {
   const [isRecording, setIsRecording] = useState(false);
   const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
@@ -35,10 +35,6 @@ function AudioRecorder({ onAudioReady, onLog }) {
 
       recorder.onstop = () => {
         const audioBlob = new Blob(chunksRef.current, { type: mimeType });
-        onLog(`Captured audio size: ${(audioBlob.size / 1024).toFixed(1)} KB`);
-        if (audioBlob.size < 4096) {
-          onLog('Recording is very short or quiet. Try speaking louder for 2-5 seconds.');
-        }
         onAudioReady(audioBlob, `mic_${Date.now()}.webm`);
         stream.getTracks().forEach((track) => track.stop());
       };
@@ -46,9 +42,8 @@ function AudioRecorder({ onAudioReady, onLog }) {
       recorder.start();
       mediaRecorderRef.current = recorder;
       setIsRecording(true);
-      onLog('Microphone recording started. Speak clearly and keep the mic close.');
     } catch (error) {
-      onLog(`Microphone access failed: ${error.message}`);
+      console.error('Microphone access failed:', error);
     }
   }
 
@@ -56,7 +51,6 @@ function AudioRecorder({ onAudioReady, onLog }) {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
-      onLog('Microphone recording stopped');
     }
   }
 

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-function FileUploader({ onAudioReady, onLog }) {
+function FileUploader({ onAudioReady }) {
   const [isDragging, setIsDragging] = useState(false);
 
   function handleSelectedFile(file) {
@@ -9,12 +9,11 @@ function FileUploader({ onAudioReady, onLog }) {
     }
     const allowed = ['audio/wav', 'audio/x-wav', 'audio/mpeg', 'audio/mp3', 'audio/webm'];
     if (!allowed.includes(file.type) && !/\.(wav|mp3|webm)$/i.test(file.name)) {
-      onLog('Unsupported file type. Use .wav, .mp3, or .webm');
+      console.warn('Unsupported file type:', file.type);
       return;
     }
 
     onAudioReady(file, file.name);
-    onLog(`Uploaded audio file: ${file.name}`);
   }
 
   function onDrop(event) {

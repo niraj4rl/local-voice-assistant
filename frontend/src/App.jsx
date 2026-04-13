@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import { getSttStatus, processAudio, processText, warmupStt } from './api/client';
-import ActivityLog from './components/ActivityLog';
 import AudioRecorder from './components/AudioRecorder';
 import FileUploader from './components/FileUploader';
 import OutputPreview from './components/OutputPreview';
@@ -16,27 +15,18 @@ const initialResult = {
 
 function App() {
   const [result, setResult] = useState(initialResult);
-  const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [textInput, setTextInput] = useState('');
   const [sttStatus, setSttStatus] = useState('checking');
   const [sttErrorMessage, setSttErrorMessage] = useState('');
 
-  function appendLog(message) {
-    setLogs((current) => [...current, `${new Date().toLocaleTimeString()} - ${message}`]);
-  }
-
   async function handleAudioInput(fileBlob, filename) {
     setLoading(true);
-    appendLog('Sending audio to backend');
-    appendLog('If this is the first voice run, STT model warmup may take a while.');
 
     try {
       const data = await processAudio(fileBlob, filename);
       setResult(data);
-      setLogs((current) => [...current, ...data.logs.map((item) => `${new Date().toLocaleTimeString()} - ${item}`)]);
     } catch (error) {
-      appendLog(`Processing failed: ${error.message}`);
       setResult({ ...initialResult, output: error.message, action: 'failed', intent: 'general_chat' });
     } finally {
       setLoading(false);
@@ -50,15 +40,12 @@ function App() {
     }
 
     setLoading(true);
-    appendLog('Submitting text command');
 
     try {
       const data = await processText(textInput);
       setResult(data);
-      setLogs((current) => [...current, ...data.logs.map((item) => `${new Date().toLocaleTimeString()} - ${item}`)]);
       setTextInput('');
     } catch (error) {
-      appendLog(`Text request failed: ${error.message}`);
       setResult({ ...initialResult, output: error.message, action: 'failed', intent: 'general_chat' });
     } finally {
       setLoading(false);
@@ -87,7 +74,6 @@ function App() {
         if (!warmupRequested) {
           warmupRequested = true;
           setSttStatus('warming');
-          appendLog('Starting STT warmup in background');
           await warmupStt();
           return;
         }
@@ -138,8 +124,8 @@ function App() {
 
       <main className="mx-auto grid max-w-[1400px] grid-cols-1 gap-4 px-4 py-6 md:px-8 xl:grid-cols-[320px,1fr,340px]">
         <aside className="space-y-4">
-          <AudioRecorder onAudioReady={handleAudioInput} onLog={appendLog} />
-          <FileUploader onAudioReady={handleAudioInput} onLog={appendLog} />
+          <AudioRecorder onAudioReady={handleAudioInput} />
+          <FileUploader onAudioReady={handleAudioInput} />
 
           <section className="glass-panel animate-rise" style={{ animationDelay: '210ms' }}>
             <h2 className="panel-title">Text Command (Fallback)</h2>
@@ -164,7 +150,6 @@ function App() {
 
         <aside className="space-y-4">
           <OutputPreview result={result} />
-          <ActivityLog logs={logs} />
         </aside>
       </main>
     </div>

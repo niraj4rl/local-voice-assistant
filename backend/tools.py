@@ -79,10 +79,12 @@ class ToolExecutor:
         code = self._chat(prompt)
         if code.startswith("Local LLM unavailable"):
             code = self._generate_fallback_code(language, original_text)
-            target.write_text(code.strip() + "\n", encoding="utf-8")
+            cleaned_code = self._clean_generated_code(code, language)
+            target.write_text(cleaned_code, encoding="utf-8")
             return "file_created_fallback", f"LLM unavailable, wrote fallback {language} code to /output/{target.name}"
 
-        target.write_text(code.strip() + "\n", encoding="utf-8")
+        cleaned_code = self._clean_generated_code(code, language)
+        target.write_text(cleaned_code, encoding="utf-8")
         return "file_created", f"Wrote {language} code to /output/{target.name}"
 
     def _next_available_path(self, original: Path) -> Path:
@@ -97,6 +99,70 @@ class ToolExecutor:
                 return candidate
             index += 1
 
+    def _clean_generated_code(self, raw_code: str, language: str) -> str:
+        """Extract and clean generated code for production use."""
+        lines = raw_code.split("\n")
+        
+        # Try to extract code from markdown fences
+        fence_pattern = f"```{language}"
+        code_lines = []
+        in_fence = False
+        
+        for line in lines:
+            if line.strip().startswith(fence_pattern):
+                in_fence = True
+                continue
+            if in_fence and line.strip().startswith("```"):
+                in_fence = False
+                continue
+            if in_fence:
+                code_lines.append(line)
+        
+        # If markdown fence found, use extracted code
+        if code_lines:
+            code = "\n".join(code_lines).strip()
+        else:
+            # Otherwise use raw code as-is, but clean up
+            code = raw_code.strip()
+        
+        # Remove explanatory preamble lines (common LLM patterns)
+        cleaned_lines = []
+        skip_until_code = True
+        
+        for line in code.split("\n"):
+            stripped = line.strip()
+            
+            # Skip empty lines and explanatory text at start
+            if skip_until_code:
+                if stripped and not any(
+                    stripped.startswith(p)
+                    for p in ("Here", "This", "The following", "You can", "I've", "I'll", "```", "#!")
+                ):
+                    # Found code, start adding
+                    skip_until_code = False
+                    cleaned_lines.append(line)
+                elif stripped.startswith(("#", "import ", "from ", "def ", "class ", "export ", "async ", "function ", "const ")):
+                    # Recognized code pattern
+                    skip_until_code = False
+                    cleaned_lines.append(line)
+            else:
+                # In code section, add line but skip trailing explanation comments
+                if "Request context:" in line or "request context:" in line.lower():
+                    break
+                cleaned_lines.append(line)
+        
+        # Remove trailing empty lines
+        while cleaned_lines and not cleaned_lines[-1].strip():
+            cleaned_lines.pop()
+        
+        result = "\n".join(cleaned_lines).strip()
+        
+        # Ensure file ends with newline
+        if result and not result.endswith("\n"):
+            result += "\n"
+        
+        return result
+
     def _generate_fallback_code(self, language: str, request_text: str) -> str:
         if language == "python":
             return (
@@ -104,7 +170,7 @@ class ToolExecutor:
                 "from typing import Callable, TypeVar\n\n"
                 "T = TypeVar('T')\n\n"
                 "def retry(operation: Callable[[], T], retries: int = 3, delay_seconds: float = 0.5) -> T:\n"
-                "    \"\"\"Execute an operation with simple retry logic.\"\"\"\n"
+                "    \"\"\"Execute an operation with retry logic.\"\"\"\n"
                 "    last_error: Exception | None = None\n"
                 "    for attempt in range(1, retries + 1):\n"
                 "        try:\n"
@@ -114,9 +180,7 @@ class ToolExecutor:
                 "            if attempt == retries:\n"
                 "                break\n"
                 "            time.sleep(delay_seconds)\n"
-                "    raise RuntimeError(f'Operation failed after {retries} attempts') from last_error\n\n"
-                "# Request context:\n"
-                f"# {request_text}\n"
+                "    raise RuntimeError(f'Operation failed after {retries} attempts') from last_error\n"
             )
 
         if language == "javascript":
@@ -133,15 +197,12 @@ class ToolExecutor:
                 "    }\n"
                 "  }\n"
                 "  throw new Error(`Operation failed after ${retries} attempts: ${String(lastError)}`);\n"
-                "}\n\n"
-                "// Request context:\n"
-                f"// {request_text}\n"
+                "}\n"
             )
 
         return (
-            "// Local fallback template generated because LLM is unavailable.\n"
-            f"// Requested language: {language}\n"
-            f"// Request: {request_text}\n"
+            "// Fallback template: LLM unavailable\n"
+            f"// Language: {language}\n"
         )
 
     def _summarize(self, text: str) -> tuple[str, str]:

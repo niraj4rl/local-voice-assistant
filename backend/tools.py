@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from pathlib import Path
 
 import requests
@@ -99,7 +100,7 @@ class ToolExecutor:
             "Generate production-ready code with concise comments and best practices. "
             f"Language: {language}. User request: {original_text}"
         )
-        code = self._chat(prompt)
+        code = self._chat(prompt, num_predict=max(settings.ollama_response_max_tokens, 900))
         if code.startswith("Local LLM unavailable"):
             code = self._generate_fallback_code(language, original_text)
             cleaned_code = self._clean_generated_code(code, language)
@@ -108,9 +109,15 @@ class ToolExecutor:
             return "file_created_fallback", f"[!] LLM unavailable - using fallback\n[OK] Generated {language_label} code\n[FILE] Saved to: `/output/{target.name}`\n[TASK] {task_desc.replace('_', ' ').title()}"
 
         cleaned_code = self._clean_generated_code(code, language)
-        
-        # Verify the generated code
+
+        # Verify generated code and try to auto-recover if model output looks cut off.
         verification_result = self.verifier.verify(cleaned_code, language, execute=False)
+        cleaned_code, verification_result = self._recover_if_truncated(
+            cleaned_code,
+            language,
+            original_text,
+            verification_result,
+        )
         verification_status = verification_result["summary"]
         
         target.write_text(cleaned_code, encoding="utf-8")
@@ -127,6 +134,75 @@ class ToolExecutor:
         formatted_task = task_desc.replace('_', ' ').title()
         
         return "file_created", f"[OK] Generated {language_label} code\n[FILE] Saved to: `/output/{target.name}`\n[TASK] {formatted_task}\n[INFO] {description}\n[VERIFY] {verification_status}"
+
+    def _recover_if_truncated(
+        self,
+        cleaned_code: str,
+        language: str,
+        original_text: str,
+        verification_result: dict,
+    ) -> tuple[str, dict]:
+        current = cleaned_code
+        current_verification = verification_result
+
+        for _ in range(2):
+            if not self._looks_truncated(current, current_verification):
+                break
+
+            continuation_prompt = (
+                "The previous code output appears truncated. Continue ONLY the remaining code from where it stopped. "
+                "Do not repeat existing lines and do not add explanation. "
+                f"Language: {language}. Original request: {original_text}\n\n"
+                f"Current partial code:\n```{language}\n{current}\n```"
+            )
+            continuation = self._chat(continuation_prompt, num_predict=max(settings.ollama_response_max_tokens, 400))
+            if continuation.startswith("Local LLM unavailable"):
+                break
+
+            continuation_cleaned = self._clean_generated_code(continuation, language)
+            if not continuation_cleaned:
+                break
+
+            if continuation_cleaned in current:
+                break
+
+            current = f"{current.rstrip()}\n{continuation_cleaned.lstrip()}"
+            current_verification = self.verifier.verify(current, language, execute=False)
+
+        return current, current_verification
+
+    def _looks_truncated(self, code: str, verification_result: dict) -> bool:
+        errors_text = " ".join(verification_result.get("errors", [])).lower()
+        truncation_error_markers = (
+            "unexpected eof",
+            "unterminated",
+            "was never closed",
+            "eol while scanning",
+            "end of input",
+            "expected an indented block",
+            "not closed",
+        )
+        if any(marker in errors_text for marker in truncation_error_markers):
+            return True
+
+        non_empty_lines = [line.rstrip() for line in code.splitlines() if line.strip()]
+        if not non_empty_lines:
+            return False
+
+        last_line = non_empty_lines[-1].strip()
+        if re.match(r"^if\s+__", last_line):
+            return True
+        if last_line.endswith(("(", "[", "{", "\\", ".", ",", "=", ":")):
+            return True
+
+        if code.count("(") > code.count(")"):
+            return True
+        if code.count("[") > code.count("]"):
+            return True
+        if code.count("{") > code.count("}"):
+            return True
+
+        return False
 
     def _next_available_path(self, original: Path) -> Path:
         stem = original.stem
@@ -256,14 +332,14 @@ class ToolExecutor:
         )
         return "summarized", self._chat(prompt)
 
-    def _chat(self, prompt: str) -> str:
+    def _chat(self, prompt: str, num_predict: int | None = None) -> str:
         payload = {
             "model": self.model,
             "stream": False,
             "prompt": prompt,
             "options": {
                 "temperature": settings.ollama_temperature,
-                "num_predict": settings.ollama_response_max_tokens,
+                "num_predict": num_predict or settings.ollama_response_max_tokens,
             },
         }
         try:

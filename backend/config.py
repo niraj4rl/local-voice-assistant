@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     ollama_model: str = "mistral"
     ollama_base_url: str = "http://localhost:11434"
     ollama_intent_max_tokens: int = 80
-    ollama_response_max_tokens: int = 280
+    ollama_response_max_tokens: int = 900
     ollama_temperature: float = 0.2
     use_stt_api_fallback: bool = False
     stt_api_url: str = ""
